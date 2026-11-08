@@ -15,7 +15,7 @@ namespace cminus {
 
         // Generate includes.
         for (const auto& include : program.includes) {
-            emitLine("#include <" + include.header + ">");
+            emitLine("#include <" + include->header + ">");
         }
 
         if (!program.includes.empty() && !program.functions.empty()) {
