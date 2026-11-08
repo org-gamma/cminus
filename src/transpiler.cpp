@@ -1,73 +1,71 @@
 
 #include "transpiler.hpp"
 
-#include <sstream>
 #include <stdexcept>
 
 namespace cminus {
 
     Transpiler::Transpiler()
-        : indentation(0) {
+        : output(""), indentation(0) {
     }
 
     std::string Transpiler::transpile(const Program& program) {
-        output.str("");
         output.clear();
         indentation = 0;
 
-        emitIncludes(program);
-        
+        // Generate includes.
+        for (const auto& include : program.includes) {
+            emitLine("#include <" + include.header + ">");
+        }
+
         if (!program.includes.empty() && !program.functions.empty()) {
             emitLine("");
         }
 
+        // Generate functions.
         for (size_t i = 0; i < program.functions.size(); ++i) {
-            emitFunction(*program.functions[i]);
+            const auto& function = program.functions[i];
+
+            emitLine(function->returnType + " " + function->name + "() {");
+
+            indentation++;
+
+            for (const auto& statement : function->body) {
+                emitStatement(*statement);
+            }
+
+            indentation--;
+
+            emitLine("}");
 
             if (i + 1 < program.functions.size()) {
                 emitLine("");
             }
         }
 
-        return output.str();
+        return output;
     }
 
     void Transpiler::emitLine(const std::string& line) {
         for (int i = 0; i < indentation; ++i) {
-            output << "    ";
+            output += "    ";
         }
 
-        output << line << '\n';
-    }
-
-    void Transpiler::emitIncludes(const Program& program) {
-        for (const auto& include : program.includes) {
-            emitLine("#include <" + include.header + ">");
-        }
-    }
-
-    void Transpiler::emitFunction(const FunctionDecl& function) {
-        emitLine(function.returnType + " " + function.name + "() {");
-
-        indentation++;
-
-        for (const auto& statement : function.body) {
-            emitStatement(*statement);
-        }
-
-        indentation--;
-
-        emitLine("}");
+        output += line;
+        output += '\n';
     }
 
     void Transpiler::emitStatement(const Statement& statement) {
-        if (const auto* render = dynamic_cast<const RenderStmt*>(&statement)) {
+        if (const auto* render =
+                dynamic_cast<const RenderStmt*>(&statement)) {
+
             emitLine("return " + emitExpression(*render->value) + ";");
             return;
         }
 
         if (const auto* expression =
                 dynamic_cast<const ExpressionStmt*>(&statement)) {
+
             emitLine(emitExpression(*expression->expression) + ";");
             return;
         }
@@ -75,8 +73,11 @@ namespace cminus {
         throw std::runtime_error("Unknown statement type.");
     }
 
-    std::string Transpiler::emitExpression(const Expression& expression) {
-        if (const auto* literal = dynamic_cast<const LiteralExpr*>(&expression)) {
+    std::string Transpiler::emitExpression(
+        const Expression& expression
+    ) {
+        if (const auto* literal =
+                dynamic_cast<const LiteralExpr*>(&expression)) {
             return emitLiteral(*literal);
         }
 
@@ -137,7 +138,9 @@ namespace cminus {
         return literal.value;
     }
 
-    std::string Transpiler::emitIdentifier(const IdentifierExpr& identifier) {
+    std::string Transpiler::emitIdentifier(
+        const IdentifierExpr& identifier
+    ) {
         return identifier.name;
     }
 
@@ -150,42 +153,62 @@ namespace cminus {
     }
 
     std::string Transpiler::emitCall(const CallExpr& call) {
-        std::ostringstream result;
+        std::string result;
 
-        // CMinus standard output functions.
+        // CMinus standard library functions.
         if (call.name == "print" ||
             call.name == "println" ||
             call.name == "printf") {
-            result << "cminus::";
+            result += "cminus::";
         }
 
-        result << call.name << "(";
+        result += call.name;
+        result += "(";
 
         for (size_t i = 0; i < call.arguments.size(); ++i) {
             if (i > 0) {
-                result << ", ";
+                result += ", ";
             }
 
-            result << emitExpression(*call.arguments[i]);
+            result += emitExpression(*call.arguments[i]);
         }
 
-        result << ")";
+        result += ")";
 
-        return result.str();
+        return result;
     }
 
-    std::string Transpiler::tokenToOperator(TokenType type) {
+    std::string Transpiler::tokenToOperator(TokenType type) const {
         switch (type) {
-            case TokenType::PLUS:          return "+";
-            case TokenType::MINUS:         return "-";
-            case TokenType::MULTIPLY:      return "*";
-            case TokenType::DIVIDE:        return "/";
-            case TokenType::EQUAL:         return "==";
-            case TokenType::NOT_EQUAL:     return "!=";
-            case TokenType::LESS:          return "<";
-            case TokenType::GREATER:       return ">";
-            case TokenType::LESS_EQUAL:    return "<=";
-            case TokenType::GREATER_EQUAL: return ">=";
+            case TokenType::PLUS:
+                return "+";
+
+            case TokenType::MINUS:
+                return "-";
+
+            case TokenType::MULTIPLY:
+                return "*";
+
+            case TokenType::DIVIDE:
+                return "/";
+
+            case TokenType::EQUAL:
+                return "==";
+
+            case TokenType::NOT_EQUAL:
+                return "!=";
+
+            case TokenType::LESS:
+                return "<";
+
+            case TokenType::GREATER:
+                return ">";
+
+            case TokenType::LESS_EQUAL:
+                return "<=";
+
+            case TokenType::GREATER_EQUAL:
+                return ">=";
 
             default:
                 throw std::runtime_error("Unknown binary operator.");
